@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+if [ $# -eq 0 ] then
+	echo "No video file provided"
+	exit 1
+fi
+
+generate_thumbs() {
+	FRAMES=12
+	INTERVAL=$(bc <<< "scale=4; 1/$FRAMES")
+	DURATION=$(ffprobe -v error -select_streams v:0 -show_entries stream=duration -of default=noprint_wrappers=1:nokey=1 $@)
+	PROGRESS=0
+	while [ $PROGRESS -lt $FRAMES ]
+	do
+		TIMESTAMP=$(bc <<< "scale=4; ($PROGRESS * $INTERVAL) * $DURATION")
+		NUM=$(printf %02d $PROGRESS)
+		ffmpeg -loglevel panic -i $@ -ss $TIMESTAMP -vframes 1 $DIR/$NUM.png
+		PROGRESS=$[ $PROGRESS+1 ]
+	done
+	ffmpeg -loglevel panic -i $@ -ss $DURATION -vframes 1 $DIR/$FRAMES.png
+}
+
+FILENAME=${1%%.*}
+DIR=$(mktemp -d)
+
+prepend_dir() {
+	for i in $@
+	do
+		echo "$DIR/$i"
+	done
+}
+
+generate_thumbs $1
+prepend_dir `ls $DIR` > $DIR/list.txt
+montage @$DIR/list.txt -geometry +3+4 $FILENAME-thumbs.jpg
+echo "Created: $FILENAME-thumbs.jpg"
+rm -r $DIR
